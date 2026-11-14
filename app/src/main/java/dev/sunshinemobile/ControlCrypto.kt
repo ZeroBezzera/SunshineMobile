@@ -4,7 +4,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/*
+/**
  * Control stream decryption. Key = rikey from /launch, AES-128-GCM, 16-byte tag.
  * Wire layout of an encrypted ENet message body:
  *   [LE16 0x0001][LE16 len][LE32 seq][16-byte tag][ciphertext]

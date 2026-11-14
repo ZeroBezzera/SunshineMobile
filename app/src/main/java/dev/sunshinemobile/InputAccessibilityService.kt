@@ -13,7 +13,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.math.hypot
 
-/*
+/**
  * Injects the remote client's input into this phone without root:
  *  - mouse/touch  -> dispatchGesture (tap, long-press, drag/swipe, wheel = swipe)
  *  - right / middle click -> Back / Home
@@ -60,7 +60,7 @@ class InputAccessibilityService : AccessibilityService() {
         cy = cy.coerceIn(0f, sh - 1f)
     }
 
-    private fun log(s: String) { if (logs++ < 25) SessionLog.add("INPUT $s") }
+    private fun log(s: String) { if (logs++ < 80) SessionLog.add("INPUT $s") }
 
     // ---- pointer ---------------------------------------------------------
 
@@ -77,6 +77,7 @@ class InputAccessibilityService : AccessibilityService() {
     }
 
     fun button(btn: Int, down: Boolean) = main.post {
+        log("button $btn ${if (down) "down" else "up"} at ${cx.toInt()},${cy.toInt()}")
         when (btn) {
             1 -> if (down) {
                 refreshSize()
@@ -85,8 +86,8 @@ class InputAccessibilityService : AccessibilityService() {
                 leftDown = false
                 finishPress()
             }
-            2 -> if (!down) { log("middle click -> HOME"); performGlobalAction(GLOBAL_ACTION_HOME) }
-            3 -> if (!down) { log("right click -> BACK"); performGlobalAction(GLOBAL_ACTION_BACK) }
+            2 -> if (!down && MIDDLE_IS_HOME) performGlobalAction(GLOBAL_ACTION_HOME)
+            3 -> if (!down && RIGHT_IS_BACK) performGlobalAction(GLOBAL_ACTION_BACK)
         }
     }
 
@@ -112,7 +113,7 @@ class InputAccessibilityService : AccessibilityService() {
         else stroke(cx, cy, cx, (cy + d).coerceIn(0f, sh - 1f), 140)
     }
 
-    /* Native touch events (only sent by Moonlight if the host advertises touch support). */
+    /** Native touch events (only sent by Moonlight if the host advertises touch support). */
     fun touch(type: Int, id: Int, nx: Float, ny: Float) = main.post {
         when (type) {
             0x01 -> if (touchId == -1) { // down
@@ -132,9 +133,12 @@ class InputAccessibilityService : AccessibilityService() {
     }
 
     private fun stroke(x1: Float, y1: Float, x2: Float, y2: Float, durMs: Long) {
+        val m = EDGE_DP * resources.displayMetrics.density
+        fun cx_(v: Float) = v.coerceIn(m, sw - m)
+        fun cy_(v: Float) = v.coerceIn(m, sh - m)
         val path = Path().apply {
-            moveTo(x1.coerceIn(0f, sw - 1f), y1.coerceIn(0f, sh - 1f))
-            if (x1 != x2 || y1 != y2) lineTo(x2.coerceIn(0f, sw - 1f), y2.coerceIn(0f, sh - 1f))
+            moveTo(cx_(x1), cy_(y1))
+            if (x1 != x2 || y1 != y2) lineTo(cx_(x2), cy_(y2))
         }
         val g = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, durMs.coerceAtLeast(1)))
@@ -145,6 +149,7 @@ class InputAccessibilityService : AccessibilityService() {
     // ---- keyboard --------------------------------------------------------
 
     fun key(vk: Int, down: Boolean, mods: Int) = main.post {
+        log("key vk=0x${vk.toString(16)} down=$down mods=$mods")
         if (!down) return@post
         val shift = (mods and 0x01) != 0
         when (vk) {
@@ -198,5 +203,8 @@ class InputAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile var instance: InputAccessibilityService? = null
+        const val RIGHT_IS_BACK = false   // right click -> Back (off until we know what Moonlight sends)
+        const val MIDDLE_IS_HOME = false  // middle click -> Home
+        const val EDGE_DP = 28f           // keep taps/swipes this far from the screen edges
     }
 }
