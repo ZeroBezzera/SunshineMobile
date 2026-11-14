@@ -42,7 +42,9 @@ class HostService : Service() {
         val h = ((dm.heightPixels * scale).toInt() / 16) * 16
 
         stats = Stats(w, h)
-        encoder = ScreenEncoder(projection, w, h, dm.densityDpi, 60, 20_000_000) { bytes, key, ptsUs ->
+        encoder = ScreenEncoder(projection, w, h, dm.densityDpi,
+            AppSettings.int(this, AppSettings.FPS, 60),
+            AppSettings.int(this, AppSettings.BITRATE, 20) * 1_000_000) { bytes, key, ptsUs ->
             stats.frames++; stats.bytes += bytes.size; if (key) stats.keyFrames++
             http.video.sendFrame(bytes, key, ptsUs)
         }.also { it.start() }

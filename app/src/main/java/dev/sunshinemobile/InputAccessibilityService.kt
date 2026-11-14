@@ -11,13 +11,13 @@ import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlin.math.hypot
 
 /*
- * Injects the remote client's input into this phone without root:
- *  - mouse/touch  -> dispatchGesture (tap, long-press, drag/swipe, wheel = swipe)
- *  - right / middle click -> Back / Home
- *  - keyboard / text -> ACTION_SET_TEXT on the focused field, Esc = Back, Win = Home
+ * Injects the remote client's input into this phone without root.
+ *  - Touch / left mouse button: a continuous stroke that follows the pointer in real time
+ *    (chained short gesture segments), so press, hold and drag happen while you do them.
+ *  - Wheel = quick swipe. Right/middle click = Back/Home (optional, see Settings).
+ *  - Keyboard / text -> ACTION_SET_TEXT on the focused field.
  */
 class InputAccessibilityService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
@@ -25,12 +25,19 @@ class InputAccessibilityService : AccessibilityService() {
     private var sh = 1920
     private var cx = 540f
     private var cy = 960f
-    private var downX = 0f
-    private var downY = 0f
-    private var downAt = 0L
-    private var leftDown = false
     private var logs = 0
     private var touchId = -1
+
+    // live stroke state (main thread only)
+    private var cur: GestureDescription.StrokeDescription? = null
+    private var strokeActive = false
+    private var inFlight = false
+    private var pendingUp = false
+    private var lastX = 0f
+    private var lastY = 0f
+    private var gen = 0
+
+    private val idleTick = Runnable { pump(true) }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -55,6 +62,13 @@ class InputAccessibilityService : AccessibilityService() {
         if (dm.widthPixels > 0 && dm.heightPixels > 0) { sw = dm.widthPixels; sh = dm.heightPixels }
     }
 
+    private fun si(key: String, def: Int) = AppSettings.int(applicationContext, key, def)
+    private fun sb(key: String, def: Boolean) = AppSettings.bool(applicationContext, key, def)
+
+    private fun margin(): Float = si(AppSettings.EDGE, 28) * resources.displayMetrics.density
+    private fun clampX(v: Float): Float { val m = margin(); return v.coerceIn(m, (sw - m).coerceAtLeast(m)) }
+    private fun clampY(v: Float): Float { val m = margin(); return v.coerceIn(m, (sh - m).coerceAtLeast(m)) }
+
     private fun clampCursor() {
         cx = cx.coerceIn(0f, sw - 1f)
         cy = cy.coerceIn(0f, sh - 1f)
@@ -65,7 +79,9 @@ class InputAccessibilityService : AccessibilityService() {
     // ---- pointer ---------------------------------------------------------
 
     fun moveRel(dx: Int, dy: Int) = main.post {
-        cx += dx; cy += dy; clampCursor()
+        val k = si(AppSettings.POINTER, 100) / 100f
+        cx += dx * k; cy += dy * k; clampCursor()
+        onMoved()
     }
 
     fun moveAbs(x: Int, y: Int, refW: Int, refH: Int) = main.post {
@@ -73,77 +89,124 @@ class InputAccessibilityService : AccessibilityService() {
             cx = x * sw.toFloat() / refW
             cy = y * sh.toFloat() / refH
             clampCursor()
+            onMoved()
         }
     }
 
     fun button(btn: Int, down: Boolean) = main.post {
         log("button $btn ${if (down) "down" else "up"} at ${cx.toInt()},${cy.toInt()}")
         when (btn) {
-            1 -> if (down) {
-                refreshSize()
-                leftDown = true; downX = cx; downY = cy; downAt = System.currentTimeMillis()
-            } else if (leftDown) {
-                leftDown = false
-                finishPress()
-            }
-            2 -> if (!down && MIDDLE_IS_HOME) performGlobalAction(GLOBAL_ACTION_HOME)
-            3 -> if (!down && RIGHT_IS_BACK) performGlobalAction(GLOBAL_ACTION_BACK)
+            1 -> if (down) { refreshSize(); beginStroke() } else endStroke()
+            2 -> if (!down && sb(AppSettings.MIDDLE_HOME, false)) performGlobalAction(GLOBAL_ACTION_HOME)
+            3 -> if (!down && sb(AppSettings.RIGHT_BACK, false)) performGlobalAction(GLOBAL_ACTION_BACK)
         }
-    }
-
-    private fun finishPress() {
-        val held = System.currentTimeMillis() - downAt
-        val slop = 24f * resources.displayMetrics.density
-        if (hypot(cx - downX, cy - downY) < slop) {
-            val dur = if (held > 450) held.coerceAtMost(1500) else 25L
-            log("tap ${downX.toInt()},${downY.toInt()} ${dur}ms")
-            stroke(downX, downY, downX, downY, dur)
-        } else {
-            log("drag ${downX.toInt()},${downY.toInt()} -> ${cx.toInt()},${cy.toInt()}")
-            stroke(downX, downY, cx, cy, held.coerceIn(80L, 1500L))
-        }
-    }
-
-    fun scroll(amount: Int, horizontal: Boolean) = main.post {
-        // 120 units per wheel notch; positive = wheel up = content moves down = finger swipes down
-        val notches = amount / 120f
-        val d = (notches * 0.18f * (if (horizontal) sw else sh)).coerceIn(-0.5f * sh, 0.5f * sh)
-        if (d == 0f) return@post
-        if (horizontal) stroke(cx, cy, (cx + d).coerceIn(0f, sw - 1f), cy, 140)
-        else stroke(cx, cy, cx, (cy + d).coerceIn(0f, sh - 1f), 140)
     }
 
     /* Native touch events (only sent by Moonlight if the host advertises touch support). */
     fun touch(type: Int, id: Int, nx: Float, ny: Float) = main.post {
         when (type) {
-            0x01 -> if (touchId == -1) { // down
+            0x01 -> if (touchId == -1) {
                 refreshSize()
                 touchId = id
                 cx = nx * sw; cy = ny * sh; clampCursor()
-                leftDown = true; downX = cx; downY = cy; downAt = System.currentTimeMillis()
+                beginStroke()
             }
-            0x03 -> if (id == touchId) { cx = nx * sw; cy = ny * sh; clampCursor() }
+            0x03 -> if (id == touchId) { cx = nx * sw; cy = ny * sh; clampCursor(); onMoved() }
             0x02 -> if (id == touchId) {
                 cx = nx * sw; cy = ny * sh; clampCursor()
-                touchId = -1; leftDown = false
-                finishPress()
+                touchId = -1
+                endStroke()
             }
-            0x04, 0x07 -> { touchId = -1; leftDown = false }
+            0x04, 0x07 -> { touchId = -1; endStroke() }
         }
     }
 
-    private fun stroke(x1: Float, y1: Float, x2: Float, y2: Float, durMs: Long) {
-        val m = EDGE_DP * resources.displayMetrics.density
-        fun cx_(v: Float) = v.coerceIn(m, sw - m)
-        fun cy_(v: Float) = v.coerceIn(m, sh - m)
+    private fun onMoved() { if (strokeActive && !inFlight) pump(false) }
+
+    private fun resetStroke() {
+        main.removeCallbacks(idleTick)
+        cur = null; strokeActive = false; inFlight = false; pendingUp = false
+    }
+
+    private fun beginStroke() {
+        gen++
+        resetStroke()
+        val x = clampX(cx); val y = clampY(cy)
+        lastX = x; lastY = y
+        val path = Path().apply { moveTo(x, y) }
+        val s = GestureDescription.StrokeDescription(path, 0, 1, true)
+        cur = s; strokeActive = true; pendingUp = false
+        send(s, false)
+    }
+
+    private fun endStroke() {
+        if (!strokeActive) return
+        pendingUp = true
+        pump(false)
+    }
+
+    /* Send the next segment of the live stroke toward the latest pointer position. */
+    private fun pump(force: Boolean) {
+        val s = cur ?: return
+        if (!strokeActive || inFlight) return
+        val tx = clampX(cx); val ty = clampY(cy)
+        val ending = pendingUp
+        if (!ending && !force && tx == lastX && ty == lastY) return
         val path = Path().apply {
-            moveTo(cx_(x1), cy_(y1))
-            if (x1 != x2 || y1 != y2) lineTo(cx_(x2), cy_(y2))
+            moveTo(lastX, lastY)
+            if (tx != lastX || ty != lastY) lineTo(tx, ty)
         }
-        val g = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, durMs.coerceAtLeast(1)))
-            .build()
-        dispatchGesture(g, null, null)
+        val dur = si(AppSettings.SEGMENT, 10).toLong().coerceAtLeast(1)
+        val next = try {
+            s.continueStroke(path, 0, dur, !ending)
+        } catch (e: Exception) {
+            log("continueStroke failed: $e"); resetStroke(); return
+        }
+        cur = next; lastX = tx; lastY = ty
+        send(next, ending)
+    }
+
+    private fun send(s: GestureDescription.StrokeDescription, last: Boolean) {
+        val myGen = gen
+        inFlight = true
+        val ok = dispatchGesture(
+            GestureDescription.Builder().addStroke(s).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(d: GestureDescription?) {
+                    if (myGen != gen) return
+                    inFlight = false
+                    if (last) { resetStroke(); return }
+                    pump(false)
+                    // keep a held finger alive even when the pointer is still
+                    if (strokeActive && !inFlight) { main.removeCallbacks(idleTick); main.postDelayed(idleTick, 80) }
+                }
+                override fun onCancelled(d: GestureDescription?) {
+                    if (myGen != gen) return
+                    log("gesture cancelled")
+                    resetStroke()
+                }
+            }, main
+        )
+        if (!ok) { log("dispatch refused"); resetStroke() }
+    }
+
+    // ---- wheel -----------------------------------------------------------
+
+    fun scroll(amount: Int, horizontal: Boolean) = main.post {
+        // 120 units per wheel notch; positive = wheel up = content moves down = finger swipes down
+        val k = si(AppSettings.SCROLL, 100) / 100f
+        val notches = amount / 120f
+        val d = (notches * 0.18f * k * (if (horizontal) sw else sh)).coerceIn(-0.5f * sh, 0.5f * sh)
+        if (d == 0f) return@post
+        val x1 = clampX(cx); val y1 = clampY(cy)
+        val path = Path().apply {
+            moveTo(x1, y1)
+            if (horizontal) lineTo(clampX(cx + d), y1) else lineTo(x1, clampY(cy + d))
+        }
+        dispatchGesture(
+            GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 140)).build(),
+            null, null
+        )
     }
 
     // ---- keyboard --------------------------------------------------------
@@ -203,8 +266,5 @@ class InputAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile var instance: InputAccessibilityService? = null
-        const val RIGHT_IS_BACK = false   // right click -> Back (off until we know what Moonlight sends)
-        const val MIDDLE_IS_HOME = false  // middle click -> Home
-        const val EDGE_DP = 28f           // keep taps/swipes this far from the screen edges
     }
 }

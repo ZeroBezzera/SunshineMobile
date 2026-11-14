@@ -92,6 +92,11 @@ class MainActivity : Activity() {
             }
         }
 
+        val settingsBtn = Button(this).apply {
+            text = "Settings"
+            setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+        }
+
         val a11y = Button(this).apply {
             text = "Enable remote input (Accessibility)"
             setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -104,7 +109,7 @@ class MainActivity : Activity() {
         }
         logScroll = ScrollView(this).apply { addView(logView) }
 
-        root.addView(status); root.addView(button); root.addView(pinRow); root.addView(copy); root.addView(a11y)
+        root.addView(status); root.addView(button); root.addView(pinRow); root.addView(copy); root.addView(a11y); root.addView(settingsBtn)
         root.addView(logScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
 
