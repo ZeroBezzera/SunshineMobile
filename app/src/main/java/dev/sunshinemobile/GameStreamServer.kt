@@ -186,6 +186,8 @@ class GameStreamServer(private val ctx: Context) {
             pingPayload = Crypto.hex(Crypto.random(8)),
             connectData = java.nio.ByteBuffer.wrap(Crypto.random(4)).int.toLong() and 0xFFFFFFFFL
         )
+        // The /launch rikey is also the AES key for the legacy control-stream crypto.
+        StreamSession.current?.let { ControlCrypto.setKey(it.rikey) }
         val url = "<sessionUrl0>rtsp://$host:${RtspServer.PORT}</sessionUrl0>"
         return xml(if (resume) "$url<resume>1</resume>" else "$url<gamesession>1</gamesession>")
     }
