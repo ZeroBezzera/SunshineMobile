@@ -41,6 +41,8 @@ class GameStreamServer(private val ctx: Context) {
     private val sessions = ConcurrentHashMap<String, PairSession>()
     @Volatile private var running = false
     private val sockets = mutableListOf<ServerSocket>()
+    private val rtsp = RtspServer()
+    private val probes = listOf(UdpProbe(47998, "video"), UdpProbe(47999, "control"), UdpProbe(48000, "audio"))
 
     private class PairSession(val salt: ByteArray, val clientCert: X509Certificate) {
         var aesKey = ByteArray(0)
@@ -53,10 +55,15 @@ class GameStreamServer(private val ctx: Context) {
         running = true
         listen(HTTP_PORT, false)
         listen(HTTPS_PORT, true)
+        rtsp.start()
+        probes.forEach { it.start() }
     }
 
     fun stop() {
         running = false
+        rtsp.stop()
+        probes.forEach { it.stop() }
+        StreamSession.current = null
         synchronized(sockets) { sockets.forEach { try { it.close() } catch (_: Exception) {} }; sockets.clear() }
     }
 
@@ -113,7 +120,8 @@ class GameStreamServer(private val ctx: Context) {
                     val path = target.substringBefore('?')
                     val q = parseQuery(target.substringAfter('?', ""))
                     Log.i(TAG, "${if (tls) "HTTPS" else "HTTP"} $path ${q.keys}")
-                    val body = route(path, q, tls, peer).toByteArray()
+                    if (path != "/serverinfo") SessionLog.add("${if (tls) "HTTPS" else "HTTP"} $path")
+                    val body = route(path, q, tls, peer, hostFor(sock)).toByteArray()
                     val out = sock.getOutputStream()
                     out.write("HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
                     out.write(body)
@@ -135,7 +143,7 @@ class GameStreamServer(private val ctx: Context) {
     private fun xml(inner: String, code: Int = 200, msg: String = ""): String =
         """<?xml version="1.0" encoding="utf-8"?><root status_code="$code" status_message="$msg">$inner</root>"""
 
-    private fun route(path: String, q: Map<String, String>, tls: Boolean, peer: X509Certificate?): String {
+    private fun route(path: String, q: Map<String, String>, tls: Boolean, peer: X509Certificate?, host: String): String {
         val uid = q["uniqueid"] ?: ""
         return when (path) {
             "/serverinfo" -> serverInfo(if (tls) (peer != null && isPaired(peer)) else isPairedUid(uid))
@@ -147,10 +155,38 @@ class GameStreamServer(private val ctx: Context) {
                 if (tls && peer != null && isPaired(peer))
                     xml("<App><IsHdrSupported>0</IsHdrSupported><AppTitle>Phone Screen</AppTitle><ID>1</ID></App>")
                 else xml("", 401, "Not paired")
-            "/launch", "/resume" -> xml("", 404, "Streaming is not implemented yet")
-            "/cancel" -> xml("<cancel>1</cancel>")
+            "/launch", "/resume" ->
+                if (tls && peer != null && isPaired(peer)) launch(uid, q, host, path == "/resume")
+                else xml("", 401, "Not paired")
+            "/cancel" -> { StreamSession.current = null; SessionLog.add("Session cancelled"); xml("<cancel>1</cancel>") }
             else -> xml("", 404, "Not found")
         }
+    }
+
+    private fun hostFor(sock: Socket): String {
+        val a = sock.localAddress
+        return if (a is Inet4Address) a.hostAddress ?: localIp() else localIp()
+    }
+
+    /** /launch and /resume: remember the session keys, point Moonlight at our RTSP port. */
+    private fun launch(uid: String, q: Map<String, String>, host: String, resume: Boolean): String {
+        SessionLog.add((if (resume) "RESUME " else "LAUNCH ") + q.filterKeys { it != "rikey" })
+        val rikey = q["rikey"]
+        val rikeyId = q["rikeyid"]?.toIntOrNull()
+        if (rikey == null || rikeyId == null) return xml("", 400, "Missing a required launch parameter")
+        val mode = (q["mode"] ?: "0x0x0").split("x")
+        StreamSession.current = LaunchSession(
+            uid = uid,
+            width = mode.getOrNull(0)?.toIntOrNull() ?: 0,
+            height = mode.getOrNull(1)?.toIntOrNull() ?: 0,
+            fps = mode.getOrNull(2)?.toIntOrNull() ?: 0,
+            rikey = Crypto.unhex(rikey),
+            rikeyId = rikeyId,
+            pingPayload = Crypto.hex(Crypto.random(8)),
+            connectData = java.nio.ByteBuffer.wrap(Crypto.random(4)).int.toLong() and 0xFFFFFFFFL
+        )
+        val url = "<sessionUrl0>rtsp://$host:${RtspServer.PORT}</sessionUrl0>"
+        return xml(if (resume) "$url<resume>1</resume>" else "$url<gamesession>1</gamesession>")
     }
 
     // ---- pairing -----------------------------------------------------------
@@ -236,8 +272,8 @@ class GameStreamServer(private val ctx: Context) {
             "<HttpsPort>$HTTPS_PORT</HttpsPort><ExternalPort>$HTTP_PORT</ExternalPort>" +
             "<mac>00:00:00:00:00:00</mac><LocalIP>${localIp()}</LocalIP>" +
             "<ServerCodecModeSupport>1</ServerCodecModeSupport>" +
-            "<PairStatus>${if (paired) 1 else 0}</PairStatus><currentgame>0</currentgame>" +
-            "<state>SUNSHINE_SERVER_FREE</state>"
+            "<PairStatus>${if (paired) 1 else 0}</PairStatus><currentgame>${if (StreamSession.current != null) 1 else 0}</currentgame>" +
+            "<state>${if (StreamSession.current != null) "SUNSHINE_SERVER_BUSY" else "SUNSHINE_SERVER_FREE"}</state>"
         )
     }
 
