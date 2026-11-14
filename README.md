@@ -2,10 +2,9 @@
 
 Android phone as a Moonlight host.
 
-Working now: MediaProjection capture, hardware H.264 encode, mDNS advertising
-(_nvstream._tcp), minimal /serverinfo on port 47989.
+Working now: capture + H.264 encode, mDNS, /serverinfo, full Moonlight pairing (PIN, HTTP+HTTPS).
 
-Not implemented yet: pairing (/pair, crypto), HTTPS port 47984, /applist, /launch,
+Not implemented yet: /launch, RTSP, RTP video + FEC, audio, control channel, input injection.
 RTSP, RTP video + FEC, audio, control channel, input injection.
 
 Build: push to GitHub, open Actions > "Build Sunshine Mobile APK" > download artifact.

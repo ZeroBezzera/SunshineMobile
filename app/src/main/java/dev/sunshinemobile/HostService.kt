@@ -14,7 +14,7 @@ import android.util.Log
 class HostService : Service() {
     private var encoder: ScreenEncoder? = null
     private val nsd by lazy { NsdAdvertiser(this) }
-    private val http by lazy { HttpStub(this, HTTP_PORT) }
+    private val http by lazy { GameStreamServer(this) }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -45,7 +45,7 @@ class HostService : Service() {
         }.also { it.start() }
 
         http.start()
-        nsd.start(HTTP_PORT)
+        nsd.start(GameStreamServer.HTTP_PORT)
         running = true
         Log.i(TAG, "Host started")
         return START_NOT_STICKY
@@ -82,7 +82,6 @@ class HostService : Service() {
         const val ACTION_STOP = "dev.sunshinemobile.STOP"
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
-        const val HTTP_PORT = 47989
         private const val TAG = "HostService"
         @Volatile var running = false
         @Volatile var stats = Stats(0, 0)
