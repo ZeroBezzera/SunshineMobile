@@ -39,10 +39,11 @@ class HostService : Service() {
         val h = ((dm.heightPixels * scale).toInt() / 16) * 16
 
         stats = Stats(w, h)
-        encoder = ScreenEncoder(projection, w, h, dm.densityDpi, 60, 20_000_000) { bytes, key, _ ->
+        encoder = ScreenEncoder(projection, w, h, dm.densityDpi, 60, 20_000_000) { bytes, key, ptsUs ->
             stats.frames++; stats.bytes += bytes.size; if (key) stats.keyFrames++
-            // TODO: packetize into RTP + FEC and send to the paired Moonlight client.
+            http.video.sendFrame(bytes, key, ptsUs)
         }.also { it.start() }
+        http.video.onClientReady = { encoder?.requestKeyFrame() }
 
         http.start()
         nsd.start(GameStreamServer.HTTP_PORT)
