@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -91,6 +92,11 @@ class MainActivity : Activity() {
             }
         }
 
+        val a11y = Button(this).apply {
+            text = "Enable remote input (Accessibility)"
+            setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }
+
         logView = TextView(this).apply {
             textSize = 10f
             typeface = Typeface.MONOSPACE
@@ -98,7 +104,7 @@ class MainActivity : Activity() {
         }
         logScroll = ScrollView(this).apply { addView(logView) }
 
-        root.addView(status); root.addView(button); root.addView(pinRow); root.addView(copy)
+        root.addView(status); root.addView(button); root.addView(pinRow); root.addView(copy); root.addView(a11y)
         root.addView(logScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
 

@@ -44,6 +44,7 @@ class HostService : Service() {
             http.video.sendFrame(bytes, key, ptsUs)
         }.also { it.start() }
         http.video.onClientReady = { encoder?.requestKeyFrame() }
+        http.control.onIdrRequest = { encoder?.requestKeyFrame() }
 
         http.start()
         nsd.start(GameStreamServer.HTTP_PORT)

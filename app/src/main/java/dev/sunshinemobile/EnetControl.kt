@@ -185,15 +185,42 @@ class EnetControl(private val bindPort: Int) : UdpProbe(bindPort, "control") {
         }
     }
 
+    private var decFail = 0
+    private var decLogs = 0
+    private var otherLogs = 0
+    private var inputLogs = 0
+
     private fun message(ch: Int, d: ByteArray) {
         if (d.size < 4) {
             SessionLog.add("CTRL ch=$ch short ${Crypto.hex(d)}")
             return
         }
         val type = (d[0].toInt() and 0xFF) or ((d[1].toInt() and 0xFF) shl 8)
+        if (type == 0x0001) { decryptAndDispatch(ch, d); return }
         val plen = (d[2].toInt() and 0xFF) or ((d[3].toInt() and 0xFF) shl 8)
-        val payload = d.copyOfRange(4, d.size)
-        val hexp = Crypto.hex(payload.copyOf(minOf(payload.size, 32)))
+        dispatch(ch, type, plen, d.copyOfRange(4, d.size))
+    }
+
+    /** Encrypted control message: [type=0x0001][len][LE32 seq][tag(16)][ciphertext]. */
+    private fun decryptAndDispatch(ch: Int, d: ByteArray) {
+        if (d.size < 8 + 16) return
+        val seq = (d[4].toInt() and 0xFF) or ((d[5].toInt() and 0xFF) shl 8) or
+            ((d[6].toInt() and 0xFF) shl 16) or ((d[7].toInt() and 0xFF) shl 24)
+        val plain = ControlCrypto.decrypt(seq, d.copyOfRange(8, d.size))
+        if (plain == null) {
+            if (decFail++ < 5) SessionLog.add("CTRL decrypt failed ch=$ch seq=$seq len=${d.size}")
+            return
+        }
+        if (plain.size < 4) return
+        val type = (plain[0].toInt() and 0xFF) or ((plain[1].toInt() and 0xFF) shl 8)
+        val plen = (plain[2].toInt() and 0xFF) or ((plain[3].toInt() and 0xFF) shl 8)
+        if (decLogs++ < 10) {
+            SessionLog.add("CTRL dec ch=$ch type=0x" + type.toString(16).padStart(4, '0') + " len=$plen")
+        }
+        dispatch(ch, type, plen, plain.copyOfRange(4, plain.size))
+    }
+
+    private fun dispatch(ch: Int, type: Int, plen: Int, payload: ByteArray) {
         val t = "0x" + type.toString(16).padStart(4, '0')
         when (type) {
             0x0200 -> if (pingLogs++ < 2) SessionLog.add("CTRL ping ch=$ch")
@@ -201,8 +228,16 @@ class EnetControl(private val bindPort: Int) : UdpProbe(bindPort, "control") {
                 SessionLog.add("CTRL IDR request")
                 onIdrRequest?.invoke()
             }
-            0x0206 -> onInput?.invoke(payload)
-            else -> SessionLog.add("CTRL ch=$ch type=$t len=$plen payload=$hexp")
+            0x0206 -> {
+                if (inputLogs++ < 6) {
+                    SessionLog.add("CTRL input len=${payload.size} " + Crypto.hex(payload.copyOf(minOf(payload.size, 24))))
+                }
+                onInput?.invoke(payload)
+            }
+            else -> if (otherLogs++ < 40) {
+                val hexp = Crypto.hex(payload.copyOf(minOf(payload.size, 32)))
+                SessionLog.add("CTRL ch=$ch type=$t len=$plen payload=$hexp")
+            }
         }
     }
 }
