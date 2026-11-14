@@ -11,7 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 
-/**
+/*
  * Captures the screen via MediaProjection and encodes it to H.264 with the
  * hardware MediaCodec. Each encoded access unit goes to [onFrame].
  * This is where the RTP/FEC packetizer will plug in later.
@@ -64,7 +64,7 @@ class ScreenEncoder(
         Log.i(TAG, "Encoder started ${width}x$height@$fps ${bitrate / 1000}kbps")
     }
 
-    /** Ask the encoder for an IDR frame (needed when a client joins or loses packets). */
+    /* Ask the encoder for an IDR frame (needed when a client joins or loses packets). */
     fun requestKeyFrame() {
         val b = Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) }
         try { codec?.setParameters(b) } catch (e: Exception) { Log.w(TAG, "sync frame failed", e) }

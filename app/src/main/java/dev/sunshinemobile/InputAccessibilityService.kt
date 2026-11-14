@@ -13,7 +13,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.math.hypot
 
-/**
+/*
  * Injects the remote client's input into this phone without root:
  *  - mouse/touch  -> dispatchGesture (tap, long-press, drag/swipe, wheel = swipe)
  *  - right / middle click -> Back / Home
@@ -113,7 +113,7 @@ class InputAccessibilityService : AccessibilityService() {
         else stroke(cx, cy, cx, (cy + d).coerceIn(0f, sh - 1f), 140)
     }
 
-    /** Native touch events (only sent by Moonlight if the host advertises touch support). */
+    /* Native touch events (only sent by Moonlight if the host advertises touch support). */
     fun touch(type: Int, id: Int, nx: Float, ny: Float) = main.post {
         when (type) {
             0x01 -> if (touchId == -1) { // down

@@ -7,7 +7,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
 
-/** Advertises the host over mDNS as _nvstream._tcp so Moonlight can discover it. */
+/* Advertises the host over mDNS as _nvstream._tcp so Moonlight can discover it. */
 class NsdAdvertiser(private val ctx: Context) {
     private val nsd = ctx.getSystemService(Context.NSD_SERVICE) as NsdManager
     private var lock: WifiManager.MulticastLock? = null

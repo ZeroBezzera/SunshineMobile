@@ -5,7 +5,7 @@ import java.net.DatagramSocket
 import java.net.InetSocketAddress
 import java.net.SocketAddress
 
-/**
+/*
  * Owns UDP 47998. Learns the client's address from its ping packets, then sends
  * H.264 frames in Sunshine's NV_VIDEO_PACKET + RTP layout.
  * FEC percentage is 0 for now (no parity packets): fine on a clean LAN.
@@ -15,13 +15,13 @@ class VideoSender(private val bindPort: Int) : UdpProbe(bindPort, "video") {
     private var udp: DatagramSocket? = null
     @Volatile private var client: SocketAddress? = null
 
-    /** From the ANNOUNCE SDP (x-nv-video[0].packetSize). Moonlight sent 1392. */
+    /* From the ANNOUNCE SDP (x-nv-video[0].packetSize). Moonlight sent 1392. */
     @Volatile var packetSize = 1392
 
-    /** SPS+PPS in Annex B (with start codes), prepended to key frames that lack them. */
+    /* SPS+PPS in Annex B (with start codes), prepended to key frames that lack them. */
     @Volatile var codecConfig: ByteArray? = null
 
-    /** Called when the client's first ping arrives (a good time to request a key frame). */
+    /* Called when the client's first ping arrives (a good time to request a key frame). */
     @Volatile var onClientReady: (() -> Unit)? = null
 
     private var frameIndex = 1
@@ -84,7 +84,7 @@ class VideoSender(private val bindPort: Int) : UdpProbe(bindPort, "video") {
         return false
     }
 
-    /** Send one encoded frame (Annex B). Safe to call from the encoder thread. */
+    /* Send one encoded frame (Annex B). Safe to call from the encoder thread. */
     @Synchronized
     fun sendFrame(frame: ByteArray, isKey: Boolean, ptsUs: Long) {
         val dst = client ?: return

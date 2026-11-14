@@ -8,7 +8,7 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 
-/**
+/*
  * Minimal stand-in for the GameStream HTTP endpoint (port 47989).
  * Only answers /serverinfo so Moonlight can list the host as "unpaired".
  * Pairing (/pair), /applist, /launch and the HTTPS port are NOT implemented yet.

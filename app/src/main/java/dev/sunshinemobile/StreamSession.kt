@@ -11,7 +11,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** On-screen debug log (also copyable), so we can see what Moonlight asks for. */
+/* On-screen debug log (also copyable), so we can see what Moonlight asks for. */
 object SessionLog {
     private val lines = ArrayDeque<String>()
     @Volatile var version = 0
@@ -26,7 +26,7 @@ object SessionLog {
     @Synchronized fun text(): String = lines.joinToString("\n")
 }
 
-/** State negotiated by /launch and the RTSP handshake. */
+/* State negotiated by /launch and the RTSP handshake. */
 class LaunchSession(
     val uid: String,
     val width: Int,
@@ -44,7 +44,7 @@ object StreamSession {
     @Volatile var current: LaunchSession? = null
 }
 
-/** Minimal RTSP server (port 48010): OPTIONS, DESCRIBE, SETUP, ANNOUNCE, PLAY. Plaintext only. */
+/* Minimal RTSP server (port 48010): OPTIONS, DESCRIBE, SETUP, ANNOUNCE, PLAY. Plaintext only. */
 class RtspServer {
     private var server: ServerSocket? = null
     @Volatile private var running = false
@@ -181,7 +181,7 @@ class RtspServer {
     companion object { const val PORT = 48010 }
 }
 
-/** Logs the first few UDP packets on a port so we can see what Moonlight sends (stage 2 input). */
+/* Logs the first few UDP packets on a port so we can see what Moonlight sends (stage 2 input). */
 open class UdpProbe(private val port: Int, private val name: String) {
     @Volatile private var running = false
     private var sock: DatagramSocket? = null

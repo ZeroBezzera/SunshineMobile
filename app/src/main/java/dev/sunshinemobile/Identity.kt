@@ -16,10 +16,10 @@ import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Date
 
-/** The host's long-lived key + self-signed certificate. Created once, then reused. */
+/* The host's long-lived key + self-signed certificate. Created once, then reused. */
 class Identity private constructor(val privateKey: PrivateKey, val cert: X509Certificate) {
 
-    /** PEM text bytes, as Moonlight expects in the pairing exchange. */
+    /* PEM text bytes, as Moonlight expects in the pairing exchange. */
     val certPem: ByteArray
         get() {
             val b64 = Base64.encodeToString(cert.encoded, Base64.DEFAULT)

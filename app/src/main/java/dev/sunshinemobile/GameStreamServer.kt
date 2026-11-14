@@ -22,13 +22,13 @@ import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.X509TrustManager
 
-/** The PIN the user types into the app; the pairing request waits on this. */
+/* The PIN the user types into the app; the pairing request waits on this. */
 object PairingState {
     @Volatile var waiting: CompletableFuture<String>? = null
     fun submit(pin: String) { waiting?.complete(pin) }
 }
 
-/**
+/*
  * GameStream-compatible control server:
  *  - HTTP  47989: /serverinfo, /pair (steps 1-4), /unpair
  *  - HTTPS 47984: /serverinfo, /pair (final check), /applist (mutual TLS with the paired client cert)
@@ -170,7 +170,7 @@ class GameStreamServer(private val ctx: Context) {
         return if (a is Inet4Address) a.hostAddress ?: localIp() else localIp()
     }
 
-    /** /launch and /resume: remember the session keys, point Moonlight at our RTSP port. */
+    /* /launch and /resume: remember the session keys, point Moonlight at our RTSP port. */
     private fun launch(uid: String, q: Map<String, String>, host: String, resume: Boolean): String {
         SessionLog.add((if (resume) "RESUME " else "LAUNCH ") + q.filterKeys { it != "rikey" })
         val rikey = q["rikey"]
@@ -205,7 +205,7 @@ class GameStreamServer(private val ctx: Context) {
         else -> xml("<paired>0</paired>")
     }
 
-    /** Client sends its cert + salt. We wait for the user to type the PIN shown in Moonlight. */
+    /* Client sends its cert + salt. We wait for the user to type the PIN shown in Moonlight. */
     private fun pairStep1(uid: String, q: Map<String, String>): String {
         val salt = Crypto.unhex(q["salt"] ?: return xml("<paired>0</paired>"))
         val clientCert = Identity.parseCert(Crypto.unhex(q["clientcert"] ?: return xml("<paired>0</paired>")))
