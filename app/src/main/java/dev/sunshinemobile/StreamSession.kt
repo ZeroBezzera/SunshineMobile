@@ -109,6 +109,8 @@ class RtspServer {
                 val cseq = headers["cseq"] ?: "0"
                 SessionLog.add("RTSP $method $target")
                 dispatch(out, method, target, cseq, String(body))
+                out.flush()
+                break
             }
         } catch (e: Exception) {
             SessionLog.add("RTSP conn: $e")
