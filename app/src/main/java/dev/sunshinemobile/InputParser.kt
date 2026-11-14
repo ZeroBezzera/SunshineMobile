@@ -1,6 +1,6 @@
 package dev.sunshinemobile
 
-/**
+/*
  * Decodes the Moonlight input packet carried in control message 0x0206:
  *   [BE32 size (bytes that follow)][LE32 magic][body...]
  */

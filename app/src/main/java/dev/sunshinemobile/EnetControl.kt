@@ -6,7 +6,7 @@ import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/**
+/*
  * Minimal ENet 1.3 server for the Moonlight control stream (UDP 47999).
  * One peer at a time. Handles CONNECT -> ACK + VERIFY_CONNECT, ACKs every reliable command,
  * and logs/dispatches the control messages carried inside (type/len little-endian).
@@ -201,7 +201,7 @@ class EnetControl(private val bindPort: Int) : UdpProbe(bindPort, "control") {
         dispatch(ch, type, plen, d.copyOfRange(4, d.size))
     }
 
-    /** Encrypted control message: [type=0x0001][len][LE32 seq][tag(16)][ciphertext]. */
+    /* Encrypted control message: [type=0x0001][len][LE32 seq][tag(16)][ciphertext]. */
     private fun decryptAndDispatch(ch: Int, d: ByteArray) {
         if (d.size < 8 + 16) return
         val seq = (d[4].toInt() and 0xFF) or ((d[5].toInt() and 0xFF) shl 8) or
