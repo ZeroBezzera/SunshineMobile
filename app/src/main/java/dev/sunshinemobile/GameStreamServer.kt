@@ -42,7 +42,7 @@ class GameStreamServer(private val ctx: Context) {
     @Volatile private var running = false
     private val sockets = mutableListOf<ServerSocket>()
     private val rtsp = RtspServer()
-    private val probes = listOf(UdpProbe(47998, "video"), UdpProbe(47999, "control"), UdpProbe(48000, "audio"))
+    private val probes = listOf(UdpProbe(47998, "video"), EnetControl(47999), UdpProbe(48000, "audio"))
 
     private class PairSession(val salt: ByteArray, val clientCert: X509Certificate) {
         var aesKey = ByteArray(0)

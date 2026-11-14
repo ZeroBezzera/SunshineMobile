@@ -182,11 +182,11 @@ class RtspServer {
 }
 
 /** Logs the first few UDP packets on a port so we can see what Moonlight sends (stage 2 input). */
-class UdpProbe(private val port: Int, private val name: String) {
+open class UdpProbe(private val port: Int, private val name: String) {
     @Volatile private var running = false
     private var sock: DatagramSocket? = null
 
-    fun start() {
+    open fun start() {
         running = true
         Thread({
             try {
@@ -209,7 +209,7 @@ class UdpProbe(private val port: Int, private val name: String) {
         }, "udp-$name").start()
     }
 
-    fun stop() {
+    open fun stop() {
         running = false
         try { sock?.close() } catch (_: Exception) {}
     }
