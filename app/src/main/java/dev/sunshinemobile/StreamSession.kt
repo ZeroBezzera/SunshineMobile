@@ -190,7 +190,7 @@ class UdpProbe(private val port: Int, private val name: String) {
         running = true
         Thread({
             try {
-                val s = DatagramSocket(null).apply { reuseAddress = true; bind(InetSocketAddress(port)) }
+                val s = DatagramSocket(null).apply { reuseAddress = true; bind(InetSocketAddress(this@UdpProbe.port)) }
                 sock = s
                 val buf = ByteArray(2048)
                 var n = 0
