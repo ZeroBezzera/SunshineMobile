@@ -189,6 +189,7 @@ class EnetControl(private val bindPort: Int) : UdpProbe(bindPort, "control") {
     private var decLogs = 0
     private var otherLogs = 0
     private var inputLogs = 0
+    private var idrCount = 0
 
     private fun message(ch: Int, d: ByteArray) {
         if (d.size < 4) {
@@ -225,7 +226,7 @@ class EnetControl(private val bindPort: Int) : UdpProbe(bindPort, "control") {
         when (type) {
             0x0200 -> if (pingLogs++ < 2) SessionLog.add("CTRL ping ch=$ch")
             0x0302 -> {
-                SessionLog.add("CTRL IDR request")
+                if (idrCount++ < 5 || idrCount % 100 == 0) SessionLog.add("CTRL IDR request #$idrCount")
                 onIdrRequest?.invoke()
             }
             0x0206 -> {

@@ -7,12 +7,15 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.projection.MediaProjectionManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 
 class HostService : Service() {
     private var encoder: ScreenEncoder? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+    @Volatile private var lastIdrAt = 0L
     private val nsd by lazy { NsdAdvertiser(this) }
     private val http by lazy { GameStreamServer(this) }
 
@@ -44,7 +47,17 @@ class HostService : Service() {
             http.video.sendFrame(bytes, key, ptsUs)
         }.also { it.start() }
         http.video.onClientReady = { encoder?.requestKeyFrame() }
-        http.control.onIdrRequest = { encoder?.requestKeyFrame() }
+        http.control.onIdrRequest = {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastIdrAt >= 500) { lastIdrAt = now; encoder?.requestKeyFrame() }
+        }
+
+        try {
+            val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "sunshine-lowlat").apply {
+                setReferenceCounted(false); acquire()
+            }
+        } catch (e: Exception) { Log.w(TAG, "wifi lock failed", e) }
 
         http.start()
         nsd.start(GameStreamServer.HTTP_PORT)
@@ -66,6 +79,8 @@ class HostService : Service() {
 
     private fun shutdown() {
         encoder?.stop(); encoder = null
+        try { wifiLock?.release() } catch (_: Exception) {}
+        wifiLock = null
         http.stop(); nsd.stop()
         running = false
         stopForeground(STOP_FOREGROUND_REMOVE)

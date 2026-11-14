@@ -146,7 +146,7 @@ class VideoSender(private val bindPort: Int) : UdpProbe(bindPort, "video") {
                     putLe32(pkt, 28, (x shl 12) or (count shl 22)) // fecInfo, 0% parity
                     System.arraycopy(body, (first + x) * chunk, pkt, 32, chunk)
                     s.send(DatagramPacket(pkt, pkt.size, dst))
-                    if (++burst >= 24) {
+                    if (++burst >= 16) {
                         burst = 0
                         try { Thread.sleep(1) } catch (_: InterruptedException) {}
                     }
