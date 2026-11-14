@@ -122,6 +122,7 @@ class GameStreamServer(private val ctx: Context) {
             } catch (e: Exception) {
                 Log.w(TAG, "request failed: $e")
             }
+            Unit
         }
     }
 
