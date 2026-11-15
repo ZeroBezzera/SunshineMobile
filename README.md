@@ -30,3 +30,5 @@ Android 10 (API 29) or newer, and a Moonlight client on the same network.
 
 ## Reporting bugs
 Open an issue and include the log from the app's **Copy log** button.
+
+have fun :)
