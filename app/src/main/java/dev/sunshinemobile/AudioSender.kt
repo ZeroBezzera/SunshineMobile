@@ -10,9 +10,9 @@ import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.os.Process
-import org.concentus.OpusApplication
-import org.concentus.OpusEncoder
-import org.concentus.OpusSignal
+import io.github.jaredmdobson.concentus.OpusApplication
+import io.github.jaredmdobson.concentus.OpusEncoder
+import io.github.jaredmdobson.concentus.OpusSignal
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
