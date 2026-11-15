@@ -1,10 +1,13 @@
-# Sunshine Mobile (scaffold)
+# Sunshine Streaming Mobile (scaffold)
 
 Android phone as a Moonlight host.
 
-Working now: capture + H.264 encode, mDNS, pairing, /launch + RTSP handshake (plaintext), UDP probes + on-screen log.
+# THIS APP IS NOT DONE YET
+## List of working features for normal user
+- Host is showing up in Moonlight (no "Add Manualy" is required)
+- Connecting to device
+- Screen Capture
+- Buggy support for touch
+- No support for keyboard or other (controllers etc.)
 
-Not implemented yet: RTP video + FEC, ENet control channel, audio, input injection.
-RTSP, RTP video + FEC, audio, control channel, input injection.
-
-Build: push to GitHub, open Actions > "Build Sunshine Mobile APK" > download artifact.
+# Check releases for newest app
