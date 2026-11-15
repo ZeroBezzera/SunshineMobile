@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -30,14 +31,25 @@ class InputAccessibilityService : AccessibilityService() {
 
     // live stroke state (main thread only)
     private var cur: GestureDescription.StrokeDescription? = null
-    private var strokeActive = false
-    private var inFlight = false
-    private var pendingUp = false
+    private var strokeActive = false   // a held finger exists in the system
+    private var inFlight = false       // a segment is being executed
+    private var wantDown = false       // what the remote pointer is doing right now
     private var lastX = 0f
     private var lastY = 0f
     private var gen = 0
+    private var lastInputAt = 0L
 
-    private val idleTick = Runnable { pump(true) }
+    private val watchdog = Runnable { onWatchdog() }
+    private val idleTick = Runnable {
+        if (!strokeActive || inFlight) return@Runnable
+        if (SystemClock.elapsedRealtime() - lastInputAt > 10_000) {
+            log("idle release")
+            wantDown = false
+            reconcile()
+        } else {
+            pump(true)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -96,7 +108,7 @@ class InputAccessibilityService : AccessibilityService() {
     fun button(btn: Int, down: Boolean) = main.post {
         log("button $btn ${if (down) "down" else "up"} at ${cx.toInt()},${cy.toInt()}")
         when (btn) {
-            1 -> if (down) { refreshSize(); beginStroke() } else endStroke()
+            1 -> setDown(down)
             2 -> if (!down && sb(AppSettings.MIDDLE_HOME, false)) performGlobalAction(GLOBAL_ACTION_HOME)
             3 -> if (!down && sb(AppSettings.RIGHT_BACK, false)) performGlobalAction(GLOBAL_ACTION_BACK)
         }
@@ -106,43 +118,58 @@ class InputAccessibilityService : AccessibilityService() {
     fun touch(type: Int, id: Int, nx: Float, ny: Float) = main.post {
         when (type) {
             0x01 -> if (touchId == -1) {
-                refreshSize()
                 touchId = id
                 cx = nx * sw; cy = ny * sh; clampCursor()
-                beginStroke()
+                setDown(true)
             }
             0x03 -> if (id == touchId) { cx = nx * sw; cy = ny * sh; clampCursor(); onMoved() }
             0x02 -> if (id == touchId) {
                 cx = nx * sw; cy = ny * sh; clampCursor()
                 touchId = -1
-                endStroke()
+                setDown(false)
             }
-            0x04, 0x07 -> { touchId = -1; endStroke() }
+            0x04, 0x07 -> { touchId = -1; setDown(false) }
         }
     }
 
-    private fun onMoved() { if (strokeActive && !inFlight) pump(false) }
+    private fun setDown(d: Boolean) {
+        wantDown = d
+        lastInputAt = SystemClock.elapsedRealtime()
+        reconcile()
+    }
+
+    private fun onMoved() {
+        lastInputAt = SystemClock.elapsedRealtime()
+        reconcile()
+    }
+
+    /*
+     * Keeps the system's finger in sync with the remote pointer. Every stroke we start is
+     * always ended: if the pointer is released while a segment is running, the release is
+     * sent as soon as that segment completes, and a new press waits until then.
+     */
+    private fun reconcile() {
+        if (inFlight) return
+        if (!strokeActive) {
+            if (wantDown) beginStroke()
+            return
+        }
+        pump(false)
+    }
 
     private fun resetStroke() {
         main.removeCallbacks(idleTick)
-        cur = null; strokeActive = false; inFlight = false; pendingUp = false
+        main.removeCallbacks(watchdog)
+        cur = null; strokeActive = false; inFlight = false; wantDown = false
     }
 
     private fun beginStroke() {
-        gen++
-        resetStroke()
+        refreshSize()
         val x = clampX(cx); val y = clampY(cy)
         lastX = x; lastY = y
-        val path = Path().apply { moveTo(x, y) }
-        val s = GestureDescription.StrokeDescription(path, 0, 1, true)
-        cur = s; strokeActive = true; pendingUp = false
+        val s = GestureDescription.StrokeDescription(Path().apply { moveTo(x, y) }, 0, 1, true)
+        cur = s; strokeActive = true
         send(s, false)
-    }
-
-    private fun endStroke() {
-        if (!strokeActive) return
-        pendingUp = true
-        pump(false)
     }
 
     /* Send the next segment of the live stroke toward the latest pointer position. */
@@ -150,7 +177,7 @@ class InputAccessibilityService : AccessibilityService() {
         val s = cur ?: return
         if (!strokeActive || inFlight) return
         val tx = clampX(cx); val ty = clampY(cy)
-        val ending = pendingUp
+        val ending = !wantDown
         if (!ending && !force && tx == lastX && ty == lastY) return
         val path = Path().apply {
             moveTo(lastX, lastY)
@@ -167,18 +194,22 @@ class InputAccessibilityService : AccessibilityService() {
     }
 
     private fun send(s: GestureDescription.StrokeDescription, last: Boolean) {
-        val myGen = gen
+        val myGen = ++gen
         inFlight = true
+        main.removeCallbacks(idleTick)
+        main.removeCallbacks(watchdog)
+        main.postDelayed(watchdog, 500)
         val ok = dispatchGesture(
             GestureDescription.Builder().addStroke(s).build(),
             object : GestureResultCallback() {
                 override fun onCompleted(d: GestureDescription?) {
                     if (myGen != gen) return
+                    main.removeCallbacks(watchdog)
                     inFlight = false
-                    if (last) { resetStroke(); return }
-                    pump(false)
+                    if (last) { cur = null; strokeActive = false }
+                    reconcile()
                     // keep a held finger alive even when the pointer is still
-                    if (strokeActive && !inFlight) { main.removeCallbacks(idleTick); main.postDelayed(idleTick, 80) }
+                    if (strokeActive && !inFlight) main.postDelayed(idleTick, 80)
                 }
                 override fun onCancelled(d: GestureDescription?) {
                     if (myGen != gen) return
@@ -188,6 +219,14 @@ class InputAccessibilityService : AccessibilityService() {
             }, main
         )
         if (!ok) { log("dispatch refused"); resetStroke() }
+    }
+
+    /* The system never answered a segment: ignore it and try to release the finger. */
+    private fun onWatchdog() {
+        log("gesture callback timeout")
+        gen++
+        inFlight = false
+        if (strokeActive) { wantDown = false; reconcile() }
     }
 
     // ---- wheel -----------------------------------------------------------
