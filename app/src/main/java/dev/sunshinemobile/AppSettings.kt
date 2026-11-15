@@ -14,6 +14,7 @@ object AppSettings {
     const val FPS = "fps"
     const val AUDIO_ON = "audio_on"
     const val AUDIO_KBPS = "audio_kbps"
+    const val AUDIO_TEST = "audio_test_tone"
 
     private fun p(c: Context) = c.getSharedPreferences("settings", Context.MODE_PRIVATE)
     fun int(c: Context, k: String, d: Int): Int = p(c).getInt(k, d)

@@ -137,6 +137,8 @@ class AudioSender(private val bindPort: Int, private val ctx: Context) : UdpProb
             var seq = 0
             var ts = 0
             var sent = 0L
+            var phase = 0.0
+            var peak = 0
             while (captureRun && active) {
                 var got = 0
                 while (got < shorts && captureRun) {
@@ -145,6 +147,15 @@ class AudioSender(private val bindPort: Int, private val ctx: Context) : UdpProb
                     got += n
                 }
                 if (!captureRun) break
+                if (AppSettings.bool(ctx, AppSettings.AUDIO_TEST, false)) {
+                    for (i in 0 until frame) {
+                        val v = (Math.sin(phase) * 8000).toInt().toShort()
+                        pcm[2 * i] = v; pcm[2 * i + 1] = v
+                        phase += 2.0 * Math.PI * 440.0 / 48000.0
+                        if (phase > 2.0 * Math.PI) phase -= 2.0 * Math.PI
+                    }
+                }
+                for (x in pcm) { val a = if (x < 0) -x.toInt() else x.toInt(); if (a > peak) peak = a }
                 val len = enc.encode(pcm, 0, frame, opus, 0, opus.size)
                 if (len <= 0) continue
                 val to = client ?: continue
@@ -165,7 +176,7 @@ class AudioSender(private val bindPort: Int, private val ctx: Context) : UdpProb
                 seq = (seq + 1) and 0xFFFF
                 ts += ms
                 sent++
-                if (sent == 1L || sent % 2000 == 0L) SessionLog.add("AUDIO packets sent: $sent (last ${len} bytes)")
+                if (sent == 1L || sent % 1000 == 0L) { SessionLog.add("AUDIO packets sent: $sent, loudest sample since last = $peak (0 = silence)"); peak = 0 }
             }
         } catch (e: Exception) {
             SessionLog.add("AUDIO capture error: $e")

@@ -36,6 +36,7 @@ class SettingsActivity : Activity() {
         header(root, "Audio (applies on next connection)")
         toggle(root, "Stream audio", AppSettings.AUDIO_ON, true)
         slider(root, "Audio bitrate", AppSettings.AUDIO_KBPS, 32, 192, 96, " kbps")
+        toggle(root, "Audio test tone (sends a 440 Hz beep, for debugging)", AppSettings.AUDIO_TEST, false)
 
         root.addView(Button(this).apply {
             text = "Reset to defaults"
