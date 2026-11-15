@@ -12,6 +12,8 @@ object AppSettings {
     const val MIDDLE_HOME = "middle_click_home"
     const val BITRATE = "bitrate_mbps"
     const val FPS = "fps"
+    const val AUDIO_ON = "audio_on"
+    const val AUDIO_KBPS = "audio_kbps"
 
     private fun p(c: Context) = c.getSharedPreferences("settings", Context.MODE_PRIVATE)
     fun int(c: Context, k: String, d: Int): Int = p(c).getInt(k, d)

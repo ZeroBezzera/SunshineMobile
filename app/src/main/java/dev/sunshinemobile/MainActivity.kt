@@ -113,8 +113,10 @@ class MainActivity : Activity() {
         root.addView(logScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
 
-        if (Build.VERSION.SDK_INT >= 33) requestPermissions(
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.RECORD_AUDIO), 0)
+        requestPermissions(
+            if (Build.VERSION.SDK_INT >= 33)
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.RECORD_AUDIO)
+            else arrayOf(Manifest.permission.RECORD_AUDIO), 0)
 
         button.setOnClickListener {
             if (HostService.running) {

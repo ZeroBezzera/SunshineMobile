@@ -36,4 +36,5 @@ android {
 
 dependencies {
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+    implementation("io.github.jaredmdobson:concentus:1.0.2")
 }

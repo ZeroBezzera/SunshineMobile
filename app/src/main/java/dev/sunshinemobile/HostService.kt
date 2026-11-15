@@ -61,6 +61,7 @@ class HostService : Service() {
             }
         } catch (e: Exception) { Log.w(TAG, "wifi lock failed", e) }
 
+        http.audio.projection = projection
         http.start()
         nsd.start(GameStreamServer.HTTP_PORT)
         running = true

@@ -33,6 +33,10 @@ class SettingsActivity : Activity() {
         slider(root, "Bitrate", AppSettings.BITRATE, 2, 60, 20, " Mbps")
         slider(root, "Encoder frame rate", AppSettings.FPS, 30, 144, 60, " fps")
 
+        header(root, "Audio (applies on next connection)")
+        toggle(root, "Stream audio", AppSettings.AUDIO_ON, true)
+        slider(root, "Audio bitrate", AppSettings.AUDIO_KBPS, 32, 192, 96, " kbps")
+
         root.addView(Button(this).apply {
             text = "Reset to defaults"
             setOnClickListener { AppSettings.reset(this@SettingsActivity); recreate() }
